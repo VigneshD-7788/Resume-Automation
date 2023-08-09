@@ -1,6 +1,11 @@
 package com.data_conversion.resume_to_excel.java_extraction;
 
+import net.sourceforge.tess4j.Tesseract;
+import net.sourceforge.tess4j.TesseractException;
+import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.poi.hwpf.HWPFDocument;
 import org.apache.poi.hwpf.usermodel.Paragraph;
@@ -27,11 +32,9 @@ import java.util.regex.Pattern;
 
 public class ResumeExtractionDemo {
 
-//    static boolean emailFound = true;
-
     public static void main(String[] args) {
 
-        String folderPath = "C:\\Users\\ELCOT\\Documents\\latest_bulk_resumes";
+        String folderPath = "C:\\Users\\ELCOT\\Documents\\very_latest_bulk_resumes";
 
         LinkedHashSet<String> names = new LinkedHashSet<>();
         List<String> emails = new ArrayList<>();
@@ -71,14 +74,42 @@ public class ResumeExtractionDemo {
                     newClass.add(file.getName());
                     duplicateFiles.add(newClass);
                     if (file.getName().endsWith(".pdf")) {
-                        extractFromPDF(file, names, emails);
+                        long fileSizeInBytes = file.length();
+                        long fileSizeInKB = fileSizeInBytes / 1024; // Convert bytes to kilobytes
+                        long fileSizeInMB = fileSizeInKB / 1024;    // Convert kilobytes to megabytes
+
+                        if (fileSizeInMB <= 1) {
+                            if (containsImages(file)) {
+                                extractFromImagePDF(file, names, emails);
+                            } else {
+                                extractFromPDF(file, names, emails);
+                            }
+                        } else {
+                            System.out.println("PDF file size exceeds 1 MB limit.");
+                        }
                     }
                     if (file.getName().endsWith(".docx")) {
-                        extractFromDocx(file, names, emails);
+                        long fileSizeInBytes = file.length();
+                        long fileSizeInKB = fileSizeInBytes / 1024; // Convert bytes to kilobytes
+                        long fileSizeInMB = fileSizeInKB / 1024;    // Convert kilobytes to megabytes
+
+                        if (fileSizeInMB <= 1.5) {
+                            extractFromDocx(file, names, emails);
+                        } else {
+                            System.out.println("Document file size exceeds 1.5 MB limit.");
+                        }
 
                     }
                     if (file.getName().endsWith(".doc")) {
-                        extractFromDoc(file, names, emails);
+                        long fileSizeInBytes = file.length();
+                        long fileSizeInKB = fileSizeInBytes / 1024; // Convert bytes to kilobytes
+                        long fileSizeInMB = fileSizeInKB / 1024;    // Convert kilobytes to megabytes
+
+                        if (fileSizeInMB <= 1.5) {
+                            extractFromDoc(file, names, emails);
+                        } else {
+                            System.out.println("Document file size exceeds 1.5 MB limit.");
+                        }
                     }
                 }
             }
@@ -115,9 +146,13 @@ public class ResumeExtractionDemo {
         // Remove elements at the corresponding indexes from all three lists
         for (int i = indexesToDelete.size() - 1; i >= 0; i--) {
             int indexToDelete = indexesToDelete.get(i);
-            emails.remove(indexToDelete);
-            namesList.remove(indexToDelete);
-//            phoneNumbers.remove(indexToDelete);
+            if (indexToDelete >= 0 && indexToDelete < emails.size()) {
+                emails.remove(indexToDelete);
+                namesList.remove(indexToDelete);
+                // phoneNumbers.remove(indexToDelete);
+            } else {
+                System.out.println("Index " + indexToDelete + " is out of bounds.");
+            }
         }
 
         names = new LinkedHashSet<>(namesList);
@@ -144,7 +179,7 @@ public class ResumeExtractionDemo {
         }
 
         try {
-            String excelFilePath = "C:\\Users\\ELCOT\\Downloads\\resume_extraction_demo_updated.xlsx";
+            String excelFilePath = "C:\\Users\\ELCOT\\Downloads\\resume_extraction_latest.xlsx";
             FileOutputStream outputStream = new FileOutputStream(excelFilePath);
             workbook.write(outputStream);
             workbook.close();
@@ -181,41 +216,59 @@ public class ResumeExtractionDemo {
             Matcher phoneMatcher = phonePattern.matcher(text);
 
 
-            String regex = "(?<=foundit Profile_)([^.]+)";
+            String regex =  "foundit Profile_ ([^.]+)";
             String regex2 = "([A-Za-z]+[A-Za-z]+)";
+            String regex3 =  "Naukri_(\\w+)";
             Pattern pattern = Pattern.compile(regex);
             Pattern pattern2 = Pattern.compile(regex2);
+            Pattern pattern3 = Pattern.compile(regex3);
             System.out.println("FILE++++++++++++++++"+file.getName());
             Matcher fileNameMatcher = pattern.matcher(file.getName());
             Matcher fileNameMatcher2 = pattern2.matcher(file.getName());
+            Matcher fileNameMatcher3 = pattern3.matcher(file.getName());
 
 
 
-                if (fileNameMatcher.find()) {
-                    String fullName = fileNameMatcher.group(1);
+            if (fileNameMatcher.find()) {
+                String fullName = fileNameMatcher.group(1);
+                Matcher nameMatcher = namePattern.matcher(text);
+                if (nameMatcher.find()) {
+                    String name = nameMatcher.group(1).trim();
+                    List<String> matcherGroupResult = List.of(name);
+                    if (!matcherGroupResult.contains(fullName)) {
+                        String convertedFullName = convertToFullName(fullName);
+                        names.add(convertedFullName);
+                    }
+                }
+            }
+
+            if (!fileNameMatcher.find() && fileNameMatcher2.find()) {
+                String fullName = fileNameMatcher2.group(1);
+                if(!fullName.contains("Naukri")) {
                     Matcher nameMatcher = namePattern.matcher(text);
                     if (nameMatcher.find()) {
                         String name = nameMatcher.group(1).trim();
                         List<String> matcherGroupResult = List.of(name);
-                        if (!matcherGroupResult.contains(fullName)) {
+                        if (!matcherGroupResult.contains(fullName) && !fullName.contains("foundit")) {
                             String convertedFullName = convertToFullName(fullName);
                             names.add(convertedFullName);
                         }
                     }
                 }
+            }
 
-                if (!fileNameMatcher.find() && fileNameMatcher2.find()) {
-                    String fullName = fileNameMatcher2.group(1);
-                    Matcher nameMatcher = namePattern.matcher(text);
-                    if (nameMatcher.find()) {
-                        String name = nameMatcher.group(1).trim();
-                            List<String> matcherGroupResult = List.of(name);
-                            if (!matcherGroupResult.contains(fullName)) {
-                                String convertedFullName = convertToFullName(fullName);
-                                names.add(convertedFullName);
-                            }
+            if ((!fileNameMatcher.find() && fileNameMatcher3.find())) {
+                String fullName = fileNameMatcher3.group(1);
+                Matcher nameMatcher = namePattern.matcher(text);
+                if (nameMatcher.find()) {
+                    String name = nameMatcher.group(1).trim();
+                    List<String> matcherGroupResult = List.of(name);
+                    if (!matcherGroupResult.contains(fullName) && (!fullName.contains("foundit"))) {
+                        String convertedFullName = convertToFullName(fullName);
+                        names.add(convertedFullName);
                     }
                 }
+            }
 
                 while (emailMatcher.find()) {
                     String email = emailMatcher.group();
@@ -236,6 +289,119 @@ public class ResumeExtractionDemo {
 //                }
 
         } catch (IOException e) {
+            e.printStackTrace();
+        }
+        if (!emailFound) {
+            String email = "Email Not Found";
+            emails.add(email);
+        }
+//        if (!phoneNumberFound) {
+//            String phoneNumber = "Phone Number Not Found";
+//            phoneNumbers.add(phoneNumber);
+//        }
+
+    }
+
+    private static void extractFromImagePDF(File file, LinkedHashSet<String> names, List<String> emails) {
+
+        boolean phoneNumberFound = false;
+        boolean emailFound = false;
+
+        HashSet<String> uniquePhoneNumbersSet = new HashSet<>();
+        HashSet<String> uniqueEmailsSet = new HashSet<>();
+
+        Tesseract tesseract = new Tesseract();
+
+        try {
+            tesseract.setDatapath("C:\\Users\\ELCOT\\Downloads\\Tess4J\\tessdata");
+            String text = tesseract.doOCR(file);
+            System.out.println(text);
+
+            Pattern namePattern = Pattern.compile("(?i)\\b([A-Z][a-z]+(?: [A-Z][a-z]+)?)\\b");
+
+
+            Pattern emailPattern = Pattern.compile("[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}");
+            Matcher emailMatcher = emailPattern.matcher(text);
+
+
+//            Pattern phonePattern = Pattern.compile("(?:(?:\\+91)|(?:0))?[789]\\d{9}");
+            Pattern phonePattern = Pattern.compile("(?:(?:\\+91)|(?:0)|(?:\\+65))?[789]\\d{9}");
+            Matcher phoneMatcher = phonePattern.matcher(text);
+
+
+            String regex =  "foundit Profile_ ([^.]+)";
+            String regex2 = "([A-Za-z]+[A-Za-z]+)";
+            String regex3 =  "Naukri_(\\w+)";
+            Pattern pattern = Pattern.compile(regex);
+            Pattern pattern2 = Pattern.compile(regex2);
+            Pattern pattern3 = Pattern.compile(regex3);
+            System.out.println("FILE++++++++++++++++"+file.getName());
+            Matcher fileNameMatcher = pattern.matcher(file.getName());
+            Matcher fileNameMatcher2 = pattern2.matcher(file.getName());
+            Matcher fileNameMatcher3 = pattern3.matcher(file.getName());
+
+
+
+            if (fileNameMatcher.find()) {
+                String fullName = fileNameMatcher.group(1);
+                Matcher nameMatcher = namePattern.matcher(text);
+                if (nameMatcher.find()) {
+                    String name = nameMatcher.group(1).trim();
+                    List<String> matcherGroupResult = List.of(name);
+                    if (!matcherGroupResult.contains(fullName)) {
+                        String convertedFullName = convertToFullName(fullName);
+                        names.add(convertedFullName);
+                    }
+                }
+            }
+
+            if (!fileNameMatcher.find() && fileNameMatcher2.find()) {
+                    String fullName = fileNameMatcher2.group(1);
+                    if(!fullName.contains("Naukri")) {
+                    Matcher nameMatcher = namePattern.matcher(text);
+                    if (nameMatcher.find()) {
+                        String name = nameMatcher.group(1).trim();
+                        List<String> matcherGroupResult = List.of(name);
+                        if (!matcherGroupResult.contains(fullName) && !fullName.contains("foundit")) {
+                            String convertedFullName = convertToFullName(fullName);
+                            names.add(convertedFullName);
+                        }
+                    }
+                }
+            }
+
+            if ((!fileNameMatcher.find() && fileNameMatcher3.find())) {
+                String fullName = fileNameMatcher3.group(1);
+                Matcher nameMatcher = namePattern.matcher(text);
+                if (nameMatcher.find()) {
+                    String name = nameMatcher.group(1).trim();
+                    List<String> matcherGroupResult = List.of(name);
+                    if (!matcherGroupResult.contains(fullName) && (!fullName.contains("foundit"))) {
+                        String convertedFullName = convertToFullName(fullName);
+                        names.add(convertedFullName);
+                    }
+                }
+            }
+
+            while (emailMatcher.find()) {
+                String email = emailMatcher.group();
+                if (!uniqueEmailsSet.contains(email) && uniqueEmailsSet.size() == 0) {
+                    uniqueEmailsSet.add(email);
+                    emails.add(email);
+                    emailFound = true;
+                }
+            }
+
+//                while (phoneMatcher.find()) {
+//                    String phoneNumber = phoneMatcher.group();
+//                    if (!uniquePhoneNumbersSet.contains(phoneNumber) && uniquePhoneNumbersSet.size() == 0) {
+//                        uniquePhoneNumbersSet.add(phoneNumber);
+//                        phoneNumbers.add(phoneNumber);
+//                        phoneNumberFound = true;
+//                    }
+//                }
+
+        } catch (TesseractException e) {
             e.printStackTrace();
         }
         if (!emailFound) {
@@ -275,40 +441,59 @@ public class ResumeExtractionDemo {
                 Matcher phoneMatcher = phonePattern.matcher(text);
 
 
-                String regex = "(?<=foundit Profile_)([^.]+)";
+                String regex =  "foundit Profile_ ([^.]+)";
                 String regex2 = "([A-Za-z]+[A-Za-z]+)";
+                String regex3 =  "Naukri_(\\w+)";
                 Pattern pattern = Pattern.compile(regex);
                 Pattern pattern2 = Pattern.compile(regex2);
+                Pattern pattern3 = Pattern.compile(regex3);
                 System.out.println("FILE++++++++++++++++"+file.getName());
                 Matcher fileNameMatcher = pattern.matcher(file.getName());
                 Matcher fileNameMatcher2 = pattern2.matcher(file.getName());
+                Matcher fileNameMatcher3 = pattern3.matcher(file.getName());
 
 
-                    if (fileNameMatcher.find()) {
-                        String fullName = fileNameMatcher.group(1);
+
+                if (fileNameMatcher.find()) {
+                    String fullName = fileNameMatcher.group(1);
+                    Matcher nameMatcher = namePattern.matcher(text);
+                    if (nameMatcher.find()) {
+                        String name = nameMatcher.group(1).trim();
+                        List<String> matcherGroupResult = List.of(name);
+                        if (!matcherGroupResult.contains(fullName)) {
+                            String convertedFullName = convertToFullName(fullName);
+                            names.add(convertedFullName);
+                        }
+                    }
+                }
+
+                if (!fileNameMatcher.find() && fileNameMatcher2.find()) {
+                    String fullName = fileNameMatcher2.group(1);
+                    if(!fullName.contains("Naukri")) {
                         Matcher nameMatcher = namePattern.matcher(text);
                         if (nameMatcher.find()) {
                             String name = nameMatcher.group(1).trim();
                             List<String> matcherGroupResult = List.of(name);
-                            if (!matcherGroupResult.contains(fullName)) {
+                            if (!matcherGroupResult.contains(fullName) && !fullName.contains("foundit")) {
                                 String convertedFullName = convertToFullName(fullName);
                                 names.add(convertedFullName);
                             }
                         }
                     }
+                }
 
-                    if (!fileNameMatcher.find() && fileNameMatcher2.find()) {
-                        String fullName = fileNameMatcher2.group(1);
-                        Matcher nameMatcher = namePattern.matcher(text);
-                        if (nameMatcher.find()) {
-                            String name = nameMatcher.group(1).trim();
-                            List<String> matcherGroupResult = List.of(name);
-                            if (!matcherGroupResult.contains(fullName)) {
-                                String convertedFullName = convertToFullName(fullName);
-                                names.add(convertedFullName);
-                            }
+                if ((!fileNameMatcher.find() && fileNameMatcher3.find())) {
+                    String fullName = fileNameMatcher3.group(1);
+                    Matcher nameMatcher = namePattern.matcher(text);
+                    if (nameMatcher.find()) {
+                        String name = nameMatcher.group(1).trim();
+                        List<String> matcherGroupResult = List.of(name);
+                        if (!matcherGroupResult.contains(fullName) && (!fullName.contains("foundit"))) {
+                            String convertedFullName = convertToFullName(fullName);
+                            names.add(convertedFullName);
                         }
                     }
+                }
 
                     while (emailMatcher.find()) {
                         String email = emailMatcher.group();
@@ -372,40 +557,58 @@ public class ResumeExtractionDemo {
                 Matcher phoneMatcher = phonePattern.matcher(text);
 
 
-                String regex = "(?<=foundit Profile_)([^.]+)";
+                String regex =  "foundit Profile_ ([^.]+)";
                 String regex2 = "([A-Za-z]+[A-Za-z]+)";
+                String regex3 =  "Naukri_(\\w+)";
                 Pattern pattern = Pattern.compile(regex);
                 Pattern pattern2 = Pattern.compile(regex2);
+                Pattern pattern3 = Pattern.compile(regex3);
                 System.out.println("FILE++++++++++++++++"+file.getName());
                 Matcher fileNameMatcher = pattern.matcher(file.getName());
                 Matcher fileNameMatcher2 = pattern2.matcher(file.getName());
+                Matcher fileNameMatcher3 = pattern3.matcher(file.getName());
 
 
-                    if (fileNameMatcher.find()) {
-                        String fullName = fileNameMatcher.group(1);
+                if (fileNameMatcher.find()) {
+                    String fullName = fileNameMatcher.group(1);
+                    Matcher nameMatcher = namePattern.matcher(text);
+                    if (nameMatcher.find()) {
+                        String name = nameMatcher.group(1).trim();
+                        List<String> matcherGroupResult = List.of(name);
+                        if (!matcherGroupResult.contains(fullName)) {
+                            String convertedFullName = convertToFullName(fullName);
+                            names.add(convertedFullName);
+                        }
+                    }
+                }
+
+                if (!fileNameMatcher.find() && fileNameMatcher2.find()) {
+                    String fullName = fileNameMatcher2.group(1);
+                    if(!fullName.contains("Naukri")) {
                         Matcher nameMatcher = namePattern.matcher(text);
                         if (nameMatcher.find()) {
                             String name = nameMatcher.group(1).trim();
                             List<String> matcherGroupResult = List.of(name);
-                            if (!matcherGroupResult.contains(fullName)) {
+                            if (!matcherGroupResult.contains(fullName) && !fullName.contains("foundit")) {
                                 String convertedFullName = convertToFullName(fullName);
                                 names.add(convertedFullName);
                             }
                         }
                     }
+                }
 
-                    if (!fileNameMatcher.find() && fileNameMatcher2.find()) {
-                        String fullName = fileNameMatcher2.group(1);
-                        Matcher nameMatcher = namePattern.matcher(text);
-                        if (nameMatcher.find()) {
-                            String name = nameMatcher.group(1).trim();
-                            List<String> matcherGroupResult = List.of(name);
-                            if (!matcherGroupResult.contains(fullName)) {
-                                String convertedFullName = convertToFullName(fullName);
-                                names.add(convertedFullName);
-                            }
+                if ((!fileNameMatcher.find() && fileNameMatcher3.find())) {
+                    String fullName = fileNameMatcher3.group(1);
+                    Matcher nameMatcher = namePattern.matcher(text);
+                    if (nameMatcher.find()) {
+                        String name = nameMatcher.group(1).trim();
+                        List<String> matcherGroupResult = List.of(name);
+                        if (!matcherGroupResult.contains(fullName) && (!fullName.contains("foundit"))) {
+                            String convertedFullName = convertToFullName(fullName);
+                            names.add(convertedFullName);
                         }
                     }
+                }
 
                     while (emailMatcher.find()) {
                         String email = emailMatcher.group();
@@ -462,6 +665,26 @@ public class ResumeExtractionDemo {
         return fullName.toString();
     }
 
+
+    public static boolean containsImages(File file) {
+        try (PDDocument document = PDDocument.load(file)) {
+            for (PDPage page : document.getPages()) {
+                for (COSName name : page.getResources().getXObjectNames()) {
+                    if (name instanceof COSName) {
+                        // Check if the XObject is an instance of PDImageXObject
+                        if (page.getResources().getXObject(name) instanceof PDImageXObject) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        // If no images found, return false
+        return false;
+    }
+
     // Custom method to compare two files for equality
     private static boolean areFilesEqual(File file1, File file2) {
         if (file1.length() != file2.length()) {
@@ -482,6 +705,5 @@ public class ResumeExtractionDemo {
             return false;
         }
     }
-
 
 }

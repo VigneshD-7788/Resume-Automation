@@ -15,6 +15,7 @@
 	<description>Resume extraction project for Spring Boot</description>
 	<properties>
 		<java.version>11</java.version>
+		<java.opts>-Xms512m -Xmx1g</java.opts>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -63,6 +64,11 @@
 			<artifactId>stanford-corenlp</artifactId>
 			<version>4.2.2</version>
 			<classifier>models</classifier>
+		</dependency>
+		<dependency>
+			<groupId>net.sourceforge.tess4j</groupId>
+			<artifactId>tess4j</artifactId>
+			<version>4.5.2</version>
 		</dependency>
 	</dependencies>
 
